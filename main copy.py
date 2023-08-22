@@ -6,11 +6,8 @@ import time
 import cv2
 from skimage import io, color, segmentation, feature, filters
 from skimage import graph
-from skimage.measure import regionprops, label;
+from skimage.measure import regionprops
 import matplotlib.pyplot as plt
-import subprocess
-import os
-
 
 def measure_object_length(image_path):
     """
@@ -70,106 +67,143 @@ if uploaded_file is not None:
     # 計測ボタン
     if st.button('計測'):
         
+        # バイトデータをnumpy配列に変換
         file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-        I = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)  
+
+        # ------------------------------------------------------
+        # 画像のトリム
+        # ------------------------------------------------------
+        # # numpy配列をOpenCVで画像として読み込む
+        # # BGRからRGBへ変換 (cv2はデフォルトでBGR形式で画像を読み込むため)
+        # I = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+        # I = cv2.cvtColor(I, cv2.COLOR_BGR2RGB)
+        
+        # I_trimmed = I[1500:2500, 800:3500]
+        # st.image(I_trimmed, caption='トリム画像', use_column_width=True)
         
         # #画像のサイズ縮小
-        I_trimmed = I[1500:2500, 800:3500]
-        st.image(I_trimmed, caption='トリム画像', use_column_width=True)
+        # height = I_trimmed.shape[0]
+        # width = I_trimmed.shape[1]
+        # image = cv2.resize(I_trimmed,(round(width/4), round(height/4)))
         
-        # ------------------------------------------------------
-        # 前景抽出
-        # ------------------------------------------------------
-        # 前景抽出のためのマスクの準備
-        mask = cv2.imread('grabcut_mask.png', 0)
+        # #入力画像
+        # image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+
+        # #画像のサイズ縮小
+        # height = image.shape[0]
+        # width = image.shape[1]
+        # image = cv2.resize(image,(round(width/4), round(height/4)))
         
-        # I_trimmedをmaskのサイズにリサイズ
-        I_resized = cv2.resize(I_trimmed, (mask.shape[1], mask.shape[0]))
+        # image_copy1 = image.copy()
+        # #グレースケール化
+        # image_copy1 = cv2.cvtColor(image_copy1,cv2.COLOR_BGR2GRAY)
         
-        img = cv2.cvtColor(I_resized, cv2.COLOR_BGR2RGB)   
-        bgdmodel = np.zeros((1, 65), np.float64)
-        fgdmodel = np.zeros((1, 65), np.float64)
-        cv2.grabCut(img, mask, None, bgdmodel, fgdmodel, 1, cv2.GC_INIT_WITH_MASK)
-        mask2 = np.where((mask==1) + (mask==3), 255, 0).astype('uint8')
-        segmented = cv2.bitwise_and(img, img, mask=mask2)
-        # st.image(output, caption='Segmented Image', use_column_width=True)
+        # #閾値処理
+        # ret,thresh = cv2.threshold(image_copy1,140,255,cv2.THRESH_BINARY)
+        # #輪郭検出 （cv2.ChAIN_APPROX_SIMPLE）
+        # contours1, hierarchy1 = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+        # #輪郭の描画
+        # cv2.drawContours(image, contours1, -1, (0, 255, 0), 2, cv2.LINE_AA)
         
-        # ------------------------------------------------------
-        # エッジ検出
-        # ------------------------------------------------------
-        image_gray = cv2.cvtColor(segmented, cv2.COLOR_BGR2GRAY)
-
-        # 外側と内側の領域のマスクを作成
-        _, outer_mask = cv2.threshold(image_gray, 1, 255, cv2.THRESH_BINARY)
-        _, inner_mask = cv2.threshold(image_gray, 254, 255, cv2.THRESH_BINARY_INV)
+        # #実行結果
+        # cv2.imshow('Drawn contours', image)
+        # cv2.imshow('Original', image_copy1)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()        
         
-        # オープニング処理を適用してノイズや小さな点を除去
-        kernel = np.ones((3,3), np.uint8)
-        outer_mask = cv2.morphologyEx(outer_mask, cv2.MORPH_OPEN, kernel)
-        inner_mask = cv2.morphologyEx(inner_mask, cv2.MORPH_OPEN, kernel)
-
-        # Cannyを使用してエッジ検出を行う
-        edges_outer = cv2.Canny(outer_mask, 100, 200)
-        edges_inner = cv2.Canny(inner_mask, 100, 200)
-
-        # 2つのエッジマップを結合
-        edges_combined = cv2.bitwise_or(edges_outer, edges_inner)
-
-        # エッジを細くするために収縮を使用
-        # kernel = np.ones((1,1), np.uint8)
-        # thin_edges = cv2.erode(edges_combined, kernel, iterations=1)
-
-        # 細いエッジを元の画像に描画
-        image_copy = img.copy()
-        result_thin_edges = cv2.cvtColor(image_copy, cv2.COLOR_BGR2RGB)
-        result_thin_edges[edges_combined == 255] = [255, 0, 0]
         
-        st.image(result_thin_edges, caption='エッジ検出', use_column_width=True)
-
-
-        # ------------------------------------------------------
-        # 楕円の認識
-        # ------------------------------------------------------
-        # # 楕円の認識
-        # image_gray = cv2.cvtColor(segmented, cv2.COLOR_BGR2RGB)
-        # _, binary_mask = cv2.threshold(image_gray, 1, 255, cv2.THRESH_BINARY)
-
-        # # ラベリング
-        # labeled_image = label(binary_mask)
-
-        # # 楕円のプロパティを取得
-        # properties = regionprops(labeled_image)
-
-        # # 楕円を塗りつぶすためのマスクを初期化
-        # fill_mask = np.zeros_like(binary_mask, dtype=np.uint8)
-
-        # # 領域ごとにチェックし、楕円として認識されるもののみを塗りつぶす
-        # for prop in properties:
-        #     if prop.major_axis_length > 10 and prop.minor_axis_length > 10:  # この値は調整するかもしれません
-        #         fill_mask[labeled_image == prop.label] = 255
-
-        # # 楕円の中を青で塗りつぶす
-        # result_image = img.copy()
-        # indices = np.where(fill_mask == 255)
-        # result_image[indices[0], indices[1], :] = [0, 0, 255]
-
-        # st.image(result_image, caption='楕円を塗りつぶした画像', use_column_width=True)        
+        # # ------------------------------------------------------
+        # # エッジを検出
+        # # ------------------------------------------------------
+        # img = I_trimmed 
+        I = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)  
+        img = cv2.cvtColor(I, cv2.COLOR_BGR2RGB)    
+        mask = np.zeros(img.shape[:2],np.uint8)
+       
+        bgdModel = np.zeros((1,65),np.float64)
+        fgdModel = np.zeros((1,65),np.float64)
+        h, w = img.shape[:2]
+        rect=(1,1,w,h)
+        cv2.grabCut(img,mask,rect,bgdModel,fgdModel,5,cv2.GC_INIT_WITH_RECT)
         
-        # # 関数を使用
-        # result_image_path, measurements = measure_object_length(uploaded_file)
+        mask2 = np.where((mask==2)|(mask==0),0,1).astype('uint8')
+        st.write(mask2)
+        
+        
+        # st.write(mask2)
+        # img2 = img*mask2[:,:,np.newaxis]
+        
+        # st.image(img2, channels='RGB', caption='前景抽出', use_column_width=True)
+        
+        # newmask is the mask image I manually labelled
+        newmask = cv2.imread('mask.png',0)
+        
+        # # whereever it is marked white (sure foreground), change mask=1
+        # # whereever it is marked black (sure background), change mask=0
+        mask2[newmask == 0] = 0
+        mask2[newmask == 255] = 1
+        
+        mask2, bgdModel, fgdModel = cv2.grabCut(img,mask2,None,bgdModel,fgdModel,5,cv2.GC_INIT_WITH_MASK)
+        
 
-        # # 計測結果の画像を表示
-        # result_image = Image.open(result_image_path)
-        # st.image(result_image, caption='計測結果', use_column_width=True)
+        # bgdModel = np.zeros((1,65),np.float64)
+        # fgdModel = np.zeros((1,65),np.float64)
 
-        # # 番号を動的に採番して計測データのテーブルを作成
-        # data = {
-        #     'No.': list(range(1, len(measurements) + 1)),  # ここで 'No.' カラムを明示的に作成
-        #     '長さ': measurements
-        # }
-        # df = pd.DataFrame(data).set_index('No.')
+        mask3 = np.where((mask2==2)|(mask2==0),0,1).astype('uint8')
+        img3 = img*mask3[:,:,np.newaxis]
 
-        # st.write(df)  # DataFrameを表示
+        st.image(img3, channels='RGB', caption='前景抽出2', use_column_width=True)
+        
+        # # Use the foreground and background indices to set the mask
+        # for ind in foregroundInd:
+        #     x = ind % img.shape[1]
+        #     y = ind // img.shape[1]
+        #     mask[y, x] = 1
+
+        # for ind in backgroundInd:
+        #     x = ind % img.shape[1]
+        #     y = ind // img.shape[1]
+        #     mask[y, x] = 0
+
+        # # Use grabCut with the initialized mask
+        # bgdModel = np.zeros((1, 65), np.float64)
+        # fgdModel = np.zeros((1, 65), np.float64)
+        # rect = (0, 0, img.shape[1]-1, img.shape[0]-1)  # Cover the whole image
+        # cv2.grabCut(img, mask, rect, bgdModel, fgdModel, 5, cv2.GC_INIT_WITH_MASK)
+        
+        # # Extract the result
+        # result_mask = np.where((mask == 2) | (mask == 0), 0, 1).astype('uint8')
+        # segmented = img * result_mask[:, :, np.newaxis]
+        
+        # st.image(segmented, caption='Segmented Image', use_column_width=True)
+
+        # # 4. エッジ検出 (パラメータ調整)
+        # edges = detect_edges(segmented_image)
+
+        # # エッジを赤色でオーバーレイ
+        # overlay_image = I_trimmed.copy()
+        # overlay_image[edges == 255] = [0, 0, 255]
+
+        # # Streamlitで画像を表示
+        # st.image(overlay_image, channels='RGB', caption='Processed Image', use_column_width=True)
+
+        
+        # 関数を使用
+        result_image_path, measurements = measure_object_length(uploaded_file)
+
+        # 計測結果の画像を表示
+        result_image = Image.open(result_image_path)
+        st.image(result_image, caption='計測結果', use_column_width=True)
+
+        # 番号を動的に採番して計測データのテーブルを作成
+        data = {
+            'No.': list(range(1, len(measurements) + 1)),  # ここで 'No.' カラムを明示的に作成
+            '長さ': measurements
+        }
+        df = pd.DataFrame(data).set_index('No.')
+
+        st.write(df)  # DataFrameを表示
         
         
         
