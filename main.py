@@ -155,21 +155,21 @@ if uploaded_file is not None:
 
         # st.image(result_image, caption='楕円を塗りつぶした画像', use_column_width=True)        
         
-        # # 関数を使用
-        # result_image_path, measurements = measure_object_length(uploaded_file)
+        # 関数を使用
+        result_image_path, measurements = measure_object_length(uploaded_file)
 
-        # # 計測結果の画像を表示
-        # result_image = Image.open(result_image_path)
-        # st.image(result_image, caption='計測結果', use_column_width=True)
+        # 計測結果の画像を表示
+        result_image = Image.open(result_image_path)
+        st.image(result_image, caption='計測結果', use_column_width=True)
 
-        # # 番号を動的に採番して計測データのテーブルを作成
-        # data = {
-        #     'No.': list(range(1, len(measurements) + 1)),  # ここで 'No.' カラムを明示的に作成
-        #     '長さ': measurements
-        # }
-        # df = pd.DataFrame(data).set_index('No.')
+        # 番号を動的に採番して計測データのテーブルを作成
+        data = {
+            'No.': list(range(1, len(measurements) + 1)),  # ここで 'No.' カラムを明示的に作成
+            '長さ': measurements
+        }
+        df = pd.DataFrame(data).set_index('No.')
 
-        # st.write(df)  # DataFrameを表示
+        st.write(df)  # DataFrameを表示
         
         
         
